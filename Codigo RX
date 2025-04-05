@@ -1,0 +1,36 @@
+//Se importan las clases necesarias para manejar pines, comunicación SPI e I2C del microcontrolador
+from machine import Pin, SPI, I2C
+import utime 
+import struct
+from nrf24l01 import NRF24L01 // Controla el módulo de radio 
+from ssd1306 import SSD1306_I2C // Controla la pantalla OLED
+// Se inicializan las interfaces
+i2c_display = I2C(0, scl=Pin(9), sda=Pin(8), freq=400000) // En el puerto 0 se configura como reloj el pín 9 para datos el pin 8 
+oled_display = SSD1306_I2C(128, 64, i2c_display) // Se inicializa la pantalla oled 
+spi_bus = SPI(0, sck=Pin(18), mosi=Pin(19), miso=Pin(16))//Reloj en pin 18, salida pin 19 y entrada pin 16
+// Configuración de pines para NFR24L01
+pin_csn = Pin(15, Pin.OUT, value=1)// Chip select como salida en pin 15 con valor inicial alto
+pin_ce = Pin(14, Pin.OUT, value=0) // Chip enable como salida en pin 14 con valor inicial bajo
+// Definición de las direcciones de los canales
+pipes_rx = b"\xe1\xf0\xf0\xf0\xf0"
+pipes_tx = b"\xd2\xf0\xf0\xf0\xf0"
+//Configuración del módulo NRF24L01
+radio = NRF24L01(spi_bus, pin_csn, pin_ce, channel=63, payload_size=1) // Se define el canal asignado para el laboratorio f=2.463 GHz
+radio.open_rx_pipe(1, pipe_rx) //abre el canal de recepción con la dirección correspondiente 
+radio.open_tx_pipe(pipe_tx)//abre el canal de transmisión con la dirección correspondiente 
+radio.reg_write(0x06, 0b00100010)// Escribe el registro (RF_SETUP), donde se configura la velocidad de 2 Mbps y una potencia de transmisión de 0dBm
+radio.start_listening()//Se pone el módulo en modo recepción
+//Función para mostrar RSSI
+def mostrar_rssi(valor_dbm):
+    oled_display.fill(0) // Limpia la pantalla oled
+    oled_display.text("RSSI recibido:", 0, 10) // Se configura el texto para confirmando la medida)
+    oled_display.text("{} dBm".format(valor_dbm), 0, 30) //Visualiza la medida de RSSI en dBm 
+    oled_display.show() // Actualiza la pantalla
+// Bucle principal
+  while True:
+    if radio.any(): //Verifica si hay un dato
+        dato = radio.recv() 
+        rssi_valor = struct.unpack("b", dato)[0] // Conversión de binario a valor entero 
+        print("RSSI:", rssi_valor, "dBm") // Se imprime el valor en la consola
+        mostrar_rssi(rssi_valor) //Muestraa el valor RSSI en la pantalla OLED
+    utime.sleep(0.1) // tiempo de delay antes de volver a repetir el bucle
