@@ -1,0 +1,47 @@
+//Importación de líbrerias
+from machine import Pin, SPI //Controla el hardware del montaje
+from nrf24l01 import NRF24L01 //Módulo de frecuencia
+import network //Conexión wifi
+import struct // Empaquetar los datos
+import utime 
+//Configuración de pines SPI para NRF24L01
+csn = Pin(15, Pin.OUT, value=1) // Se configura el pin 15 como Chip Select en estado alto
+ce = Pin(14, Pin.OUT, value=0) // Se configura el pin 14 como Chip Enable en estado bajo
+spi = SPI(0, sck=Pin(18), mosi=Pin(19), miso=Pin(16)) // Se configura el pin 18 como reloj pin 19 como entrada y pin 16 como salida
+//Configuración de WiFi
+wifi = network.WLAN(network.STA_IF) // Se crea interfaz de WiFi
+wifi.active(True) // Activación de interfaz
+SSID = "Iphone de Alejandro G" //Se definen las credenciales de la red
+PASSWORD = "alejo123"
+wifi.connect(SSID, PASSWORD) // Intento de conexión con WiFi
+//Espera de conexión WiFi
+for _ in range(20):
+    if wifi.isconnected(): // Durante 10 segundos, cada 0.5 segundos intenta 20 veces conectarse
+        print("WiFi conectado:", wifi.ifconfig()[0]) // Si se conecta muestra la dirección IP
+        break
+    utime.sleep(0.5)
+else:
+    print("No se pudo conectar al WiFi.") //Si no conecta muestra el mensaje de error
+//Configuración del módulo NRF24L01
+pipes = (b"\xe1\xf0\xf0\xf0\xf0", b"\xd2\xf0\xf0\xf0\xf0") //Define las direcciones
+nrf = NRF24L01(spi, csn, ce, channel=63, payload_size=1) // Inicializa el módulo en el canal 63, F=2,476 GHz 
+nrf.reg_write(0x06, 0b00001010) // Configura el registro RF_SETUP V= 2 Mbps Pt=0 dBm
+nrf.open_tx_pipe(pipes[0]) //abre el canal de transmision con primera dirección
+nrf.open_rx_pipe(1, pipes[1]) //abre el canal de recepcion con segunda dirección
+//Bucle principal de transmisión
+while True:
+    if wifi.isconnected():
+        rssi = wifi.status('rssi') //Verifica conexión WiFi
+        if rssi is not None:
+            try:
+                nrf.stop_listening() // Se desactiva modo recepción 
+                print("Enviando RSSI:", rssi, "dBm") // Se imprime valor a enviar
+                nrf.send(struct.pack("b", rssi)) // Envía dato como byte
+            except OSError:
+                print("Fallo al transmitir") // Anuncia posible error al transmitir
+    else:
+        print("WiFi desconectado. Reintentando...") // Si no esta conectado intenta reconectar, luego espera 0.5 segundos para volver a hacerlo
+        wifi.connect(SSID, PASSWORD)
+
+    utime.sleep(0.5)
+  
